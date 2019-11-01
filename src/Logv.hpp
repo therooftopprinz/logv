@@ -102,7 +102,10 @@ public:
             rv += ", \"string\":\"" + cleanstr + "\"";
             rv += "},";
         }
-        rv += "{}";
+        if (rv.size() && ','==rv[rv.size()-1])
+        {
+            rv.pop_back();
+        }
         rv += "]}";
         return rv;
     }
@@ -136,7 +139,8 @@ public:
         {
             e.first->second.logLines.emplace_back(LogEntry{n,n,std::move(line)});
         }
-        return "{\"status\":\"OK\"}";
+
+        return std::string() + "{\"status\":\"OK\",\"id\":\""+ std::to_string(mGenId++) + "\", \"size\":"+ std::to_string(e.first->second.logLines.size()) +"}";
     }
 private:
     uint64_t mGenId=0;

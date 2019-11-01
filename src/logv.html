@@ -1,0 +1,217 @@
+<html>
+<head>
+    <title>Logv</title>
+    <script src="jquery.js"></script>
+    <script src="jquery-ui.js"></script>
+    <link rel="stylesheet" href="jquery-ui.css">
+    <style>
+        #menu
+        {
+            width: 75px;
+        }
+        .tab-body
+        {
+            height: 100%;
+        }
+    </style>
+</head>
+<body>
+    <ul id="menu">
+        <li>
+            <div>File</div>
+            <ul>
+                <li>
+                    <div id="menu-open">Open</div>
+                </li>
+            </ul>
+        </li>
+    </ul>
+
+    <div id="tab-main">
+        <ul id="tab-main-ul"></ul>
+    </div>
+
+    <div id="dialog-open" title="File Open">
+      <div>Specify path:</div>
+      <input id="dialog-open-path" type="text"/>
+    </div>
+
+    <div id="dialog-error" title="Error">
+      <div id="dialog-error-text"></div>
+    </div>
+
+
+<script>
+    class Logv
+    {
+        constructor()
+        {
+            self = this;
+            self.scrolltimer = "invalid";
+        }
+
+        open(path)
+        {
+            self = this;
+            self.path = path;
+            self.scroll = 0;
+            self.cachedLines = [];
+            var openreq = $.get("/logv/open?path="+path, function(resp) {self.onOpen(resp)});
+        }
+
+        onOpen(resp)
+        {
+            self = this;
+            console.log("onOpen:", resp)
+            var resp = JSON.parse(resp);
+
+            if ("OK"!=resp.status)
+            {
+                $("#dialog-error-text").text("Status code: " + resp.status);
+                $("#dialog-error").dialog("open");
+                return;
+            }
+
+            self.tabref ="tab-main-div-"+resp.id;
+            self.id = resp.id;
+            self.size = resp.size;
+
+            $("#tab-main-ul").append("<li id=\"tab-main-ul-li-"+resp.id+"\"><a href=\"#"+self.tabref+"\">"+self.path+"</a></li>");
+            $("#tab-main").append("<div class=\"tab-body\" id=\""+self.tabref+"\"></div>");
+            $("#tab-main").tabs("refresh");
+
+            $("#"+self.tabref).append("<div id=\"slider\" style=\"height:500px;\"></div>");
+            $("#"+self.tabref).append("<table id=\"content\"><tbody></tbody></table>");
+
+            $("#"+self.tabref + ">#slider").slider({
+                orientation: "vertical",
+                min: 0,
+                max: self.size,
+                value: self.size,
+                slide: function( event, ui ) {self.onSlide(ui.value);}
+            });
+
+            $.get("/logv/get?id="+self.id+"&line=0&size=1000", function(resp) {self.onGet(resp)});
+        }
+
+        onGet(resp)
+        {
+            self = this;
+            var resp = JSON.parse(resp);
+            console.log("onInitGet:", resp);
+            if(resp.content.length)
+            {
+                self.cachedLines[Math.floor(resp.content[0].line/1000)] = resp;
+                self.updateDisplay();
+            }
+        }
+
+        onSlide(number)
+        {
+            self = this;
+            self.scroll = self.size-number;
+            console.log("onSlide:",self.scroll);
+            self.updateDisplay();
+            if ("invalid" == self.scrolltimer)
+            {
+                self.scrolltimer = window.setTimeout(function(){
+                    self.scrolltimer = "invalid";
+
+                    var lineCurrent = 1000*Math.floor(self.scroll/1000);
+                    var linePrev    = 1000*Math.floor((self.scroll-1000)/1000);
+                    var lineNext    = 1000*Math.floor((self.scroll+1000)/1000);
+
+                    var cacheIndexCurrent = Math.floor(self.scroll/1000)%3;
+                    var cacheIndexPrev    = Math.floor((self.scroll-1000)/1000)%3;
+                    var cacheIndexNext    = Math.floor((self.scroll+1000)/1000)%3;
+
+                    if (undefined == self.cachedLines[cacheIndexCurrent] || Math.floor(self.scroll/1000) != Math.floor(self.cachedLines[cacheIndexCurrent].content[0].line/1000))
+                    {
+                        console.log("GET /logv/get?id="+self.id+"&line=" + lineCurrent + "&size=1000");
+                        $.get("/logv/get?id="+self.id+"&line=" + lineCurrent + "&size=1000", function(resp) {self.onGet(resp)});
+                    }
+
+                    if (undefined == self.cachedLines[cacheIndexPrev] || Math.floor((self.scroll-1000)/1000) != Math.floor(self.cachedLines[cacheIndexPrev].content[0].line/1000)%3)
+                    {
+                        console.log("GET /logv/get?id="+self.id+"&line=" + linePrev + "&size=1000");
+                        $.get("/logv/get?id="+self.id+"&line=" + linePrev + "&size=1000", function(resp) {self.onGet(resp)});
+                    }
+
+                    if (undefined == self.cachedLines[cacheIndexNext] ||  Math.floor((self.scroll+1000)/1000)  != Math.floor(self.cachedLines[cacheIndexNext].content[0].line/1000)%3)
+                    {
+                        console.log("GET /logv/get?id="+self.id+"&line=" + lineNext + "&size=1000");
+                        $.get("/logv/get?id="+self.id+"&line=" + lineNext + "&size=1000", function(resp) {self.onGet(resp)});
+                    }
+
+                }, 300);
+            }
+        }
+        
+        updateDisplay()
+        {
+            console.log("updating display");
+            var tbody = $("#"+self.tabref+">table>tbody");
+            tbody.html("");
+            var currentCacheIndex = Math.floor(self.scroll/1000)%3;
+            var currentIndex = self.scroll%1000;
+            var i = 0;
+            var s = 0;
+            for (i=0; i<50; i++)
+            {
+                var trow = $("<tr></tr>");
+                if (self.cachedLines[currentCacheIndex].content.length <= (currentIndex+i))
+                {
+                    currentCacheIndex = (currentCacheIndex+1)%2;
+                    s = i;
+                }
+                trow.append("<td>"+self.cachedLines[currentCacheIndex].content[currentIndex+i-s].line+"</td>")
+                trow.append("<td>"+self.cachedLines[currentCacheIndex].content[currentIndex+i-s].original_line+"</td>")
+                console.log("update row:",i,"cache:",currentCacheIndex,"line:",currentIndex+i-s)
+                trow.append("<td><code>"+self.cachedLines[currentCacheIndex].content[currentIndex+i-s].string+"</code></td>");
+                tbody.append(trow);
+            }
+        }
+    }
+
+    $("#menu").menu();
+    $("#menu-open").bind("click", function(){
+        console.log("click: #menu-open");
+        $("#dialog-open").dialog("open");
+    });
+    $("#dialog-open").dialog({
+        autoOpen: false,
+        buttons: [
+        {
+            text: "cancel",
+            // icon: "ui-icon-cancel",
+            click: function() {$(this).dialog("close");}
+        },
+        {
+            text: "Ok",
+            // icon: "ui-icon-check",
+            click: function() {
+                var path = $("#dialog-open-path").val();
+                console.log("open: path:", path);
+                var logv = new Logv();
+                logv.open(path);
+                $(this).dialog("close");
+            }
+        }
+        ]
+    });
+    $("#dialog-error").dialog({
+        autoOpen: false,
+        buttons: [
+        {
+            text: "Ok",
+            // icon: "ui-icon-check",
+            click: function() {
+                $(this).dialog("close");
+            }
+        }
+        ]
+    });
+    $("#tab-main").tabs();
+</script>
+</body>
+</html>

@@ -39,6 +39,6 @@ int main(void)
         res.set_content(rv.c_str(), "text/plain");
     });
 
-    svr.set_base_dir("/home/cloud9/workspace");
+    svr.set_base_dir(".");
     svr.listen("0.0.0.0", 9000);
 }
