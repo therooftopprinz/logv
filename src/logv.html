@@ -4,6 +4,8 @@
     <title>Logv</title>
     <script src="jquery.js"></script>
     <script src="jquery-ui.js"></script>
+    <script src="mark.js"></script>
+    <script src="jquery.mark.js"></script>
     <link rel="stylesheet" href="jquery-ui.css">
     <style>
         * {
@@ -99,6 +101,8 @@
         {
             padding: 0px;
             margin: 0px;
+            white-space: pre;
+            font-family: monospace;
         }
     </style>
 </head>
@@ -138,7 +142,7 @@
     </div>
 
     <script>
-        gLogvById = [];
+        gLastLv = undefined;
         class Logv {
             constructor() {
                 var self = this;
@@ -149,6 +153,11 @@
                 self.scroll = 0;
                 self.scrollOffset = 0;
                 self.cachedLines = [];
+                self.marks = new Map;
+                if (undefined == Logv.opened)
+                {
+                    Logv.opened = new Map;
+                }
             }
 
             open(path) {
@@ -170,7 +179,8 @@
 
                 self.tabref = "tab-main-div-" + resp.id;
                 self.id = resp.id;
-                gLogvById["_"+self.id] = this;
+                Logv.opened.set(self.id, this);
+                Logv.lastOpened = this;
                 self.size = resp.size;
                 
                 $("#tab-main-ul").append("<li id='tab-main-ul-li-" + resp.id + "'><a href='#" + self.tabref + "'>" + self.path + "</a></li>");
@@ -220,10 +230,12 @@
             onGetRsp(resp) {
                 var self = this;
                 var resp = JSON.parse(resp);
-                // console.log("onGetRsp: updating cache", resp);
                 if (resp.content.length)
                 {
-                    self.cachedLines[Math.floor(resp.content[0].line / self.cachedLineCount) % 3] = resp;
+                    var index = Math.floor(resp.content[0].line / self.cachedLineCount) % 3;
+                    // console.log("onGetRsp updating self.cachedLines["+index+"]", resp);
+                    self.cachedLines[index] = resp;
+                    // TODO: update too slow
                     self.updateDisplay();
                 }
             }
@@ -275,6 +287,7 @@
                         newUpdate += self.sendGet(cacheIndexCurrent, lineCurrent);
                         newUpdate += self.sendGet(cacheIndexNext, lineNext);
                         newUpdate += self.sendGet(cacheIndexPrev, linePrev);
+
                         if (0==newUpdate)
                         {
                             self.updateDisplay();
@@ -289,20 +302,32 @@
                 var clc = self.cachedLineCount;
                 if (line<0)
                 {
+                    if (cacheIndex<0)
+                    {
+                        cacheIndex = 3+cacheIndex;
+                    }
+                    // invalidate cache
+                    //console.log("sendGet invalidate:", cacheIndex);
+                    self.cachedLines[cacheIndex] = undefined;
                     return false;
                 }
                 if (undefined == self.cachedLines[cacheIndex] ||
                    line != self.cachedLines[cacheIndex].content[0].line)
                 {
-                    // console.log("GET /logv/get?id=" + self.id + "&line=" + line + "&size=" + clc);
+                    // console.log("sendGet GET /logv/get?id=" + self.id + "&line=" + line + "&size=" + clc);
                     $.get("/logv/get?id=" + self.id + "&line=" + line + "&size=" + clc, function (resp) { self.onGetRsp(resp) });
                     return true;
                 }
                 return false;
             }
 
-            updateDisplay()
+            updateDisplay(forced)
             {
+                var isForced = false;
+                if (undefined != forced)
+                {
+                    isForced = forced;
+                }
                 var self = this;
                 var clc = self.cachedLineCount;
                 var currentCacheIndex = Math.floor(self.scroll / clc) % 3;
@@ -316,7 +341,7 @@
                 var i = 0;
                 for (i=0; i<3; i++)
                 {
-                    if (0==cachedCtr[i].length || undefined==self.cachedLines[i] || self.cachedLines[i].content[0].line != cachedCtr[i][0].dataset.line)
+                    if (true==isForced || 0==cachedCtr[i].length || undefined==self.cachedLines[i] || self.cachedLines[i].content[0].line != cachedCtr[i][0].dataset.line)
                     {
                         var cl = self.cachedLines[i];
                         if (0==cachedCtr[i].length)
@@ -325,43 +350,86 @@
                             $("#" + self.contentref).append("<div style='position:absolute' id='content-block-"+i+"'><div>");
                             cachedCtr[i] = $("#" + self.contentref + ">#content-block-"+i);
                         }
+
                         if (undefined==cl)
                         {
                             // console.log("updateDisplay no cache cache["+i+"]");
+                            if (0 != cachedCtr[i].length)
+                            {
+                                cachedCtr[i].html("");
+                                // console.log("updateDisplay invalidate", cachedCtr[i]);
+                            }
                             continue;
                         }
-                        // console.log("updateDisplay displaying: ",cl, "on", cachedCtr[i]);
-                        cachedCtr[i].html("");
-                        var j=0;
-                        for (j=0; j<cl.content.length; j++)
-                        {
-                            var linenumber = document.createElement("pre");
-                            linenumber.style.display = "inline";
-                            linenumber.innerText =  cl.content[j].original_line;
 
-                            var string = document.createElement("pre");
-                            string.style.display = "inline";
-                            string.style.marginLeft = "10px";
-                            string.innerText =  cl.content[j].string;
+                        if (self.cachedLines[i].content[0].line != cachedCtr[i][0].dataset.line)
+                        { // cached stale
+                            // console.log("updateDisplay displaying: ",cl, "on", cachedCtr[i]);
+                            // console.log("updateDisplay self.cachedLines[i].content[0].line: ", self.cachedLines[i].content[0].line);
+                            // console.log("updateDisplay cachedCtr[i][0].dataset.line: ", cachedCtr[i][0].dataset.line);
+                            cachedCtr[i].html("");
+                            var j=0;
+                            for (j=0; j<cl.content.length; j++)
+                            {
+                                var linenumber = document.createElement("span");
+                                linenumber.style.display = "inline";
+                                linenumber.innerText =  cl.content[j].original_line;
 
-                            var logline = document.createElement("div");
-                            logline.style.height = self.lineHeight + "px";
-                            logline.className = "logline";
+                                var string = document.createElement("span");
+                                string.style.display = "inline";
+                                string.style.marginLeft = "10px";
+                                string.innerText = cl.content[j].string;
 
-                            logline.appendChild(linenumber);
-                            logline.appendChild(string);
+                                var logline = document.createElement("div");
+                                logline.style.height = self.lineHeight + "px";
+                                logline.className = "logline";
 
-                            cachedCtr[i][0].append(logline);
+                                logline.appendChild(linenumber);
+                                logline.appendChild(string);
+
+                                cachedCtr[i][0].append(logline);
+                            }
+                            var line = (cl.content[0].line-offset);
+                            cachedCtr[i][0].style.top = line*self.lineHeight +"px";
+                            cachedCtr[i][0].dataset.line = cl.content[0].line;
+                            // console.log("updateDisplay display:",i,"at top:",line*self.lineHeight);
                         }
-                        var line = (cl.content[0].line-offset);
-                        cachedCtr[i][0].style.top = line*self.lineHeight +"px";
-                        cachedCtr[i][0].dataset.line = line;
-                        // console.log("updateDisplay display:",i,"at top:",line*self.lineHeight);
+
+                        // if (undefined == self.marktimer)
+                        // {
+                            var cachedCtrCurrent = cachedCtr[i];
+                            // self.marktimer = window.setTimeout(function(){
+                                self.marktimer = undefined;
+                                self.marks.forEach(function(value,index){
+                                    // console.log("marking",value,index,"on",cachedCtrCurrent);
+                                    cachedCtrCurrent.markRegExp(value.regex, {className: "mark-"+index});
+                                    var marked = $(".mark-"+index);
+                                    marked.css("background",value.bgColor);
+                                    marked.css("color",value.fgColor);
+                                });
+                            // }, 100);
+                        // }
                     }
                 }
                 var scroll = self.scroll-offset;
                 // console.log("updateDisplay actual scroll",self.scroll," scroll:", scroll,"scrollTop:",scroll*self.lineHeight);
                 $("#" + self.contentref).scrollTop(scroll*self.lineHeight);
+            }
+
+            addMark(regex, markNumber, fgColor, bgColor)
+            {
+                self = this;
+                self.marks.set(markNumber, {
+                    regex: regex,
+                    fgColor: fgColor,
+                    bgColor: bgColor
+                });
+                self.updateDisplay(true);
+            }
+
+            removeMark(markNumber)
+            {
+                self.marks.delete(markNumber);
             }
         }
 
