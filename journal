@@ -1,0 +1,24 @@
+-- Logs begin at Tue 2019-10-15 05:16:02 UTC, end at Fri 2019-10-18 04:52:14 UTC. --
+Oct 15 05:16:02 ip-172-31-8-113 su[11252]: pam_unix(su:auth): authentication failure; logname= uid=1001 euid=0 tty=/dev/pts/8 ruser=cloud9 rhost=  user=ubuntu
+Oct 15 05:16:04 ip-172-31-8-113 su[11252]: pam_authenticate: Authentication failure
+Oct 15 05:16:04 ip-172-31-8-113 su[11252]: FAILED su for ubuntu by cloud9
+Oct 15 05:16:04 ip-172-31-8-113 su[11252]: - /dev/pts/8 cloud9:ubuntu
+Oct 15 05:16:09 ip-172-31-8-113 su[11253]: pam_unix(su:auth): authentication failure; logname= uid=1001 euid=0 tty=/dev/pts/8 ruser=cloud9 rhost=  user=ubuntu
+Oct 15 05:16:11 ip-172-31-8-113 su[11253]: pam_authenticate: Authentication failure
+Oct 15 05:16:11 ip-172-31-8-113 su[11253]: FAILED su for ubuntu by cloud9
+Oct 15 05:16:11 ip-172-31-8-113 su[11253]: - /dev/pts/8 cloud9:ubuntu
+Oct 15 05:18:17 ip-172-31-8-113 su[11355]: pam_unix(su:auth): authentication failure; logname=ubuntu uid=1001 euid=0 tty=/dev/pts/0 ruser=cloud9 rhost=  user=ubuntu
+Oct 15 05:18:19 ip-172-31-8-113 su[11355]: pam_authenticate: Authentication failure
+Oct 15 05:18:19 ip-172-31-8-113 su[11355]: FAILED su for ubuntu by cloud9
+Oct 15 05:18:19 ip-172-31-8-113 su[11355]: - /dev/pts/0 cloud9:ubuntu
+Oct 15 05:18:25 ip-172-31-8-113 su[11356]: pam_unix(su:auth): authentication failure; logname=ubuntu uid=1001 euid=0 tty=/dev/pts/0 ruser=cloud9 rhost=  user=ubuntu
+Oct 15 05:18:28 ip-172-31-8-113 su[11356]: pam_authenticate: Authentication failure
+Oct 15 05:18:28 ip-172-31-8-113 su[11356]: FAILED su for ubuntu by cloud9
+Oct 15 05:18:28 ip-172-31-8-113 su[11356]: - /dev/pts/0 cloud9:ubuntu
+Oct 15 05:18:34 ip-172-31-8-113 su[11358]: pam_unix(su:auth): authentication failure; logname=ubuntu uid=1001 euid=0 tty=/dev/pts/0 ruser=cloud9 rhost=  user=ubuntu
+Oct 15 05:18:36 ip-172-31-8-113 su[11358]: pam_authenticate: Authentication failure
+Oct 15 05:18:36 ip-172-31-8-113 su[11358]: FAILED su for ubuntu by cloud9
+Oct 15 05:18:36 ip-172-31-8-113 su[11358]: - /dev/pts/0 cloud9:ubuntu
+-- Reboot --
+Oct 18 04:52:14 ip-172-31-8-113 sudo[2164]: pam_unix(sudo:auth): conversation failed
+Oct 18 04:52:14 ip-172-31-8-113 sudo[2164]: pam_unix(sudo:auth): auth could not identify password for [cloud9]
