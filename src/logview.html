@@ -1,0 +1,80 @@
+<html>
+    <head>
+        <script src="jquery.js"></script>
+        <script src="jquery-ui.js"></script>
+        <script src="mark.js"></script>
+        <script src="jquery.mark.js"></script>
+        <link rel="stylesheet" href="jquery-ui.css">
+        <style>
+            *
+            {
+                box-sizing: content-box;
+            }
+
+            body
+            {
+                padding: 0px;
+                margin: 0px;
+            }
+            #container-log
+            {
+                padding: 0px;
+                margin: 0px;
+                width: 50%;
+                height: 50%;
+                background: blue;
+            }
+        </style>
+        <script>
+            class LogView
+            {
+                constructor(element)
+                {
+                    var self = this;
+                    self.size = 1000;
+                    self.$ = jQuery;
+                    self.element = self.$(element);
+                    self.container = document.createElement("div");
+                    self.container.style.display             = "grid";
+                    self.container.style.gridTemplateColumns = "1fr auto";
+                    self.container.style.gridTemplateRows    = "auto";
+                    self.container.style.height    = "100%";
+                    self.container.style.width     = "100%";
+                    self.container.style.padding   = "0px";
+                    self.container.style.margin    = "0px";
+
+                    self.element.html();
+                    self.element[0].append(self.container);
+
+                    self.content = document.createElement("div");
+                    self.content.style.background = "brown";
+                    self.content.style.height     = "100%";
+                    self.container.append(self.content);
+
+                    self.scroller = document.createElement("div");
+                    self.scroller.style.background    = "green";
+                    self.scroller.style.height        = "100%";
+                    self.scroller.style.marginTop     = "10px";
+                    self.scroller.style.marginBottom  = "10px";
+                    self.scroller.style.marginLeft    = "5px";
+                    self.scroller.style.marginRight   = "5px";
+                    self.container.append(self.scroller);
+
+                    self.$(self.scroller).slider({
+                        orientation: "vertical",
+                        min: 0,
+                        max: self.size,
+                        value: self.size,
+                        slide: function (event, ui) {}
+                    });
+                }
+            }
+        </script>
+    </head>
+    <body>
+        <div id="container-log"></div>
+        <script>
+            logview = new LogView($("#container-log"));
+        </script>
+    </body>
+</html>
