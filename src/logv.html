@@ -15,46 +15,7 @@
         body {
             padding: 0px;
             margin: 0px;
-            /* overflow: hidden; */
-        }
-
-        .tab-body {
-            padding: 0px !important;
-            height: 100%;
-            width: 100%;
-        }
-
-        #tab-body-content-inner {
-            padding: 0px;
-            margin: 0px;
-            display: grid;
-            grid-template-columns: 1fr auto;
-            grid-template-rows: auto;
-        }
-
-        #container-content {
-            padding: 0px;
-            background: orange;
-            grid-row: 1/2;
-            grid-column: 1/2;
-            height: 700px;
             overflow: hidden;
-        }
-
-        #container-slider {
-            padding: 2px;
-            padding-top: 15px;
-            padding-bottom: 15px;
-            grid-row: 1/2;
-            grid-column: 2/3;
-        }
-
-        #content {
-            background: darkgray;
-        }
-
-        #container-slider>#slider {
-            height: 100%;
         }
 
         #container-body {
@@ -143,17 +104,316 @@
 
     <script>
         gLastLv = undefined;
+
+        class Viewer
+            {
+                constructor(element, size, contentCallback, displayUpdateCallback)
+                {
+                    var self = this;
+                    var i;
+
+                    self.logsize      = size;
+                    self.pageLineSize = 25;
+                    self.lineHeight   = 20;
+                    self.scroll       = 0;
+                    self.scrollx      = 0;
+                    self.contentCallback = contentCallback;
+                    self.displayUpdateCallback = displayUpdateCallback;
+                    self.pageCount  = 6;
+                    self.$ = jQuery; /* global jQuery */
+                    self.element = self.$(element);
+                    self.container = document.createElement("div");
+                    self.container.style.display             = "grid";
+                    self.container.style.gridTemplateColumns = "1fr auto";
+                    self.container.style.gridTemplateRows    = "1fr auto";
+                    self.container.style.height    = "100%";
+                    self.container.style.width     = "100%";
+                    self.container.style.padding   = "0px";
+                    self.container.style.margin    = "0px";
+
+                    self.element.html();
+                    self.element[0].append(self.container);
+
+                    self.content = document.createElement("div");
+                    self.content.style.background = "brown";
+                    self.content.style.height     = "100%";
+                    self.content.style.position   = "relative";
+                    self.content.style.overflow   = "hidden";
+                    self.content.gridRow          = "1/2"
+                    self.content.gridColumn       = "1/2"
+
+                    // $(self.content).on("mousedown", function () {
+                    //     console.log("content mouse down");
+                    //     self.contentMouseDown = true;
+                    // });
+                    // $(self.content).on("mousemove", function (event) {
+                    //     if (false == self.contentMouseDown) {
+                    //         return;
+                    //     }
+                    //     console.log("content mouse drag");
+                    // });
+                    // $(self.content).on("mouseup", function () {
+                    //     console.log("content mouse up");
+                    //     self.contentMouseDown = false;
+                    // });
+
+                    $(self.content).bind('mousewheel', function (e) {
+                        if (e.originalEvent.wheelDelta / 120 > 0)
+                        {
+                            self.onSlide(self.scroll-1);
+                        }
+                        else
+                        {
+                            self.onSlide(self.scroll+1);
+                        }
+                    });
+
+                    self.contentPages  = new Array();
+                    var pageColors = ["blue","green","red","cyan","yellow","magenta"];
+
+                    for (i=0; i<self.pageCount; i++)
+                    {
+                        self.contentPages[i] = document.createElement("div")
+                        self.contentPages[i].style.position   = "absolute";
+                        self.contentPages[i].style.background = pageColors[i%pageColors.length];
+                        self.content.append(self.contentPages[i]);
+                    }
+
+                    self.container.append(self.content);
+
+                    var scrollerContainer = document.createElement("div");
+                    scrollerContainer.style.background = "green";
+                    scrollerContainer.style.height     = "100%";
+                    scrollerContainer.style.display    = "flex";
+                    scrollerContainer.style.alignItems      = "center";
+                    scrollerContainer.style.justifyContent  = "center";
+                    scrollerContainer.style.gridRow    = "1/2"
+                    scrollerContainer.style.gridColumn = "2/3"
+
+                    var scrollerContainer2 = document.createElement("div");
+                    scrollerContainer2.style.background = "green";
+                    scrollerContainer2.style.width     = "100%";
+                    scrollerContainer2.style.display    = "flex";
+                    scrollerContainer2.style.alignItems     = "center";
+                    scrollerContainer2.style.justifyContent = "center";
+                    scrollerContainer2.style.gridRow    = "2/3"
+                    scrollerContainer2.style.gridColumn = "1/2"
+
+                    self.scroller = document.createElement("div");
+                    self.scroller.style.height        = "calc(100% - 40px)";
+                    self.scroller.style.background    = "black";
+                    self.scroller.style.border        = "0px";
+
+                    self.scroller2 = document.createElement("div");
+                    self.scroller2.style.width        = "calc(100% - 40px)";
+                    self.scroller2.style.background   = "black";
+                    self.scroller2.style.border       = "0px";
+
+                    scrollerContainer.append(self.scroller);
+                    scrollerContainer2.append(self.scroller2);
+                    self.container.append(scrollerContainer);
+                    self.container.append(scrollerContainer2);
+
+                    self.createSlider();
+
+                    self.onSlide(0);
+                }
+
+                fetch(offset, size, page)
+                {
+                    console.log("fetch", offset, size, page)
+                    var self = this;
+                    var reqcontext = {line:offset, page:page};
+                    self.contentCallback(offset, size, reqcontext,
+                    function(value, context){self.onData(value, context);});
+                }
+
+                setSize(size)
+                {
+                    var self = this;
+                    self.size = size;
+                    self.createSlider();
+                }
+
+                createSlider()
+                {
+                    var self = this;
+                    self.$(self.scroller).slider({
+                        orientation: "vertical",
+                        min: 1,
+                        max: self.logsize,
+                        value: self.logsize,
+                        slide: function (event, ui)
+                        {
+                            var value = self.logsize-ui.value;
+                            self.onSlide(value);
+                        }
+                    });
+                    self.$(self.scroller2).slider({
+                        orientation: "horizontal",
+                        min: 0,
+                        max: 1000,
+                        value: 0,
+                        slide: function (event, ui)
+                        {
+                            self.scrollx = ui.value;
+                            self.updateDisplay();
+                        }
+                    });
+                }
+
+                onSlide(value)
+                {
+                    var self = this;
+                    if (value<0)
+                    {
+                        value=0;
+                    }
+                    else if (value>=(self.logsize-1))
+                    {
+                        value = self.logsize-1;
+                    }
+                    self.scroll = value;
+                    self.container.dataset.scroll = value;
+                    if (undefined != self.updateTimer)
+                    {
+                        return;
+                    }
+
+                    self.$(self.scroller).slider("value", self.logsize-self.scroll);
+
+                    self.updateTimer = window.setTimeout(
+                        function() {
+                            self.updateTimer = undefined;
+                            self.updateDisplay();
+                        }, 100);
+                }
+
+                onData(value, context)
+                {
+                    var self = this;
+                    var page = self.contentPages[context.page]
+                    var i=0;
+
+                    if (undefined == page.dataset.requestLine || page.dataset.requestLine != context.line)
+                    {
+                        return;
+                    }
+
+                    page.innerHTML = "";
+                    page.dataset.line = context.line;
+
+                    for(i=0; i<value.content.length; i++)
+                    {
+                        var gutter = document.createElement("span");
+                        gutter.innerText = value.content[i].line + "  ";
+
+                        var line = document.createElement("span");
+                        line.innerText = value.content[i].string;
+
+                        var log = document.createElement("div");
+                        log.style.overflowY = "hidden";
+                        log.style.height = self.lineHeight + "px";
+                        log.className = "logline";
+                        log.append(gutter);
+                        log.append(line);
+
+                        page.append(log)
+                    }
+                    
+                    self.calculateMaxWidth();
+                    self.displayUpdateCallback();
+                }
+
+                calculateMaxWidth()
+                {
+                    var self = this;
+                    var maxWidth = 0;
+                    var i;
+                    for (i=0; i<self.pageCount; i++)
+                    {
+                        var currentPage = self.contentPages[i];
+                        var width = parseFloat(window.getComputedStyle(currentPage).width);
+                        console.log("calculateMaxWidth width:", window.getComputedStyle(currentPage).width);
+                        if (width>maxWidth)
+                        {
+                            maxWidth = width;
+                        }
+                    }
+                    self.maxWidth = maxWidth;
+                    var contentWidth = parseFloat(window.getComputedStyle(self.content).width);
+                    var width = self.maxWidth-contentWidth;
+
+                    if (width>0)
+                    {
+                        self.$(self.scroller2).slider("option", "disabled", false);
+                        self.$(self.scroller2).slider("option", "max", width);
+                    }
+                    else if(width<=0)
+                    {
+                        self.$(self.scroller2).slider("option", "disabled", true);
+                        self.$(self.scroller2).slider("value", 0);
+                        self.scrollx = 0;
+                    }
+                }
+
+                updateDisplay()
+                {
+                    var self = this;
+                    var i;
+                    var pageNumber = Math.floor(self.scroll/self.pageLineSize);
+                    var pageIndex = pageNumber%self.pageCount;
+                    var pageHeight = self.pageLineSize*self.lineHeight;
+                    var offset = (self.scroll%self.pageLineSize)*self.lineHeight;
+                    // console.log("updateDisplay scroll:", self.scroll, "page:", pageNumber,"page-index:",pageIndex);
+                    for (i=0; i<self.pageCount; i++)
+                    {
+                        var currentPage = self.contentPages[i];
+                        var positionToCurrentPage = i-pageIndex;
+                        var rawIndex = positionToCurrentPage%self.pageCount;
+                        var index = rawIndex;
+
+                        if (index<=(-self.pageCount/2))
+                        {
+                            index = self.pageCount + index;
+                        }
+                        else if (index > self.pageCount/2)
+                        {
+                            index =-(self.pageCount - index);
+                        }
+
+                        var currentLine = (pageNumber+index)*self.pageLineSize;
+
+                        // console.log("E:", i, "data-line", currentLine, "index", index, "width:",width);
+                        currentPage.style.top  = (index*pageHeight-offset)+"px";
+                        currentPage.style.left = -self.scrollx+"px";
+
+                        if (currentLine >= self.logsize || currentLine < 0)
+                        {
+                            currentPage.innerHTML = "end";
+                            currentPage.dataset.requestLine = -1;
+                            continue;
+                        }
+
+                        if (currentLine<=self.logsize && currentLine>=0 && ("end" == currentPage.innerHTML || undefined == currentPage.dataset.line || currentLine != currentPage.dataset.line))
+                        {
+                            currentPage.innerHTML = "loading...";
+                            currentPage.dataset.requestLine = currentLine; 
+                            self.fetch(currentLine, self.pageLineSize, i);
+                        }
+                    }
+
+                    self.calculateMaxWidth();
+                }
+            }
+
         class Logv {
             constructor() {
                 var self = this;
                 self.scrolltimer = undefined;
                 self.contentMouseDown = false;
-                self.cachedLineCount = 50;
-                self.lineHeight = 20;
-                self.scroll = 0;
-                self.scrollOffset = 0;
-                self.cachedLines = [];
                 self.marks = new Map;
+
                 if (undefined == Logv.opened)
                 {
                     Logv.opened = new Map;
@@ -171,265 +431,82 @@
                 // console.log("onOpen:", resp)
                 var resp = JSON.parse(resp);
 
-                if ("OK" != resp.status) {
+                if ("OK" != resp.status)
+                {
                     $("#dialog-error-text").text("Status code: " + resp.status);
                     $("#dialog-error").dialog("open");
                     return;
                 }
 
-                self.tabref = "tab-main-div-" + resp.id;
+                self.mainTabId = "tab-main-div-" + resp.id;
                 self.id = resp.id;
                 Logv.opened.set(self.id, this);
                 Logv.lastOpened = this;
                 self.size = resp.size;
+
+                self.tab = document.createElement("li");
+                var tablink =  document.createElement("a");
+                tablink.href = "#" + self.mainTabId;
+                tablink.innerText = self.path;
+                self.tab.append(tablink);
+                $(tablink).bind("click", function(){
+                    self.onTabEnter();
+                });
+                self.tabMain = $("#tab-main");
+                $("#tab-main-ul").append(self.tab);
                 
-                $("#tab-main-ul").append("<li id='tab-main-ul-li-" + resp.id + "'><a href='#" + self.tabref + "'>" + self.path + "</a></li>");
-                $("#tab-main").append("<div class='tab-body' id='" + self.tabref + "'><div id='tab-body-content-inner'></div></div>");
+                self.tabContent = document.createElement("div");
+                self.tabContent.id = self.mainTabId;
+                self.tabContent.style.padding = "0px";
+                self.tabMain.append(self.tabContent);
+
                 $("#tab-main").tabs("refresh");
-                
-                self.tabref = "tab-main-div-" + resp.id + ">#tab-body-content-inner";
-                // add content
-                $("#" + self.tabref).append("<div style='position:relative' id='container-content'></div>");
 
-                // add content slider
-                $("#" + self.tabref).append("<div id='container-slider'></div>");
-                $("#" + self.tabref + ">#container-slider").append("<div id='slider'></div>");
-
-                $("#" + self.tabref + ">#container-content").on("mousedown", function () { self.contentMouseDown = true; });
-                $("#" + self.tabref + ">#container-content").on("mousemove", function (event) {
-                    if (false == self.contentMouseDown) {
-                        return;
-                    }
-                    // console.log("content mouse drag");
-                });
-                $("#" + self.tabref + ">#container-content").on("mouseup", function () { self.contentMouseDown = false; });
-                $('#' + self.tabref + ">#container-content").bind('mousewheel', function (e) {
-                    if (e.originalEvent.wheelDelta / 120 > 0) {
-                        self.scroll -= 1;
-                    }
-                    else {
-                        self.scroll += 1;
-                    }
-                        self.updateScroll();
-                });
-
-                self.contentref = self.tabref + ">#container-content";
-                self.slideref = self.tabref + ">#container-slider>#slider";
-
-                $("#" + self.slideref).slider({
-                    orientation: "vertical",
-                    min: 0,
-                    max: self.size,
-                    value: self.size,
-                    slide: function (event, ui) { self.onSlide(ui.value); }
-                });
-
-                self.sendGet(0, 0);
-            }
-
-            onGetRsp(resp) {
-                var self = this;
-                var resp = JSON.parse(resp);
-                if (resp.content.length)
-                {
-                    var index = Math.floor(resp.content[0].line / self.cachedLineCount) % 3;
-                    // console.log("onGetRsp updating self.cachedLines["+index+"]", resp);
-                    self.cachedLines[index] = resp;
-                    // TODO: update too slow
-                    self.updateDisplay();
-                }
-            }
-
-            onSlide(number)
-            {
-                var self = this;
-                self.scroll = self.size - number;
-                self.updateScroll();
-            }
-
-            updateScroll()
-            {
-                var self = this;
-
-                if (self.scroll<0)
-                {
-                    self.scroll = 0;
-                    return;
-                }
-
-                if ((self.scroll-self.scrollOffset)>=1000)
-                {
-                    self.scrollOffset = self.scroll;
-                }
-                else if ((self.scroll-self.scrollOffset)<0)
-                {
-                    self.scrollOffset = self.scroll;
-                }
-
-                if (undefined == self.scrolltimer)
-                {
-                    // console.log("updateScroll running scrolltimer timer!");
-                    self.scrolltimer = window.setTimeout(function () {
-                        self.scrolltimer = undefined;
-
-                        var clc = self.cachedLineCount;
-                        var lineCurrent = clc * Math.floor(self.scroll / clc);
-                        var linePrev = clc * Math.floor((self.scroll - clc) / clc);
-                        var lineNext = clc * Math.floor((self.scroll + clc) / clc);
-
-                        var cacheIndexCurrent = Math.floor(self.scroll / clc) % 3;
-                        var cacheIndexPrev = Math.floor((self.scroll - clc) / clc) % 3;
-                        var cacheIndexNext = Math.floor((self.scroll + clc) / clc) % 3;
-
-                        // console.log("updateScroll scrolltimer expiry", self.cachedLines);
-
-                        var newUpdate = 0;
-                        newUpdate += self.sendGet(cacheIndexCurrent, lineCurrent);
-                        newUpdate += self.sendGet(cacheIndexNext, lineNext);
-                        newUpdate += self.sendGet(cacheIndexPrev, linePrev);
-
-                        if (0==newUpdate)
+                self.viewer = new Viewer(self.tabContent, self.size, function(offset, size, reqcontext, resultCallback) {
+                    $.get("/logv/get?id=" + self.id + "&line=" + offset + "&size=" + size, function (resp) {
+                        var resp = JSON.parse(resp);
+                        if (resp.content.length)
                         {
-                            self.updateDisplay();
+                            resultCallback(resp, reqcontext);
                         }
-                    }, 100);
-                }
+                    });
+                }, function() {
+                    self.onViewUpdate();
+                });
             }
 
-            sendGet(cacheIndex, line)
+            onTabEnter()
             {
                 var self = this;
-                var clc = self.cachedLineCount;
-                if (line<0)
-                {
-                    if (cacheIndex<0)
-                    {
-                        cacheIndex = 3+cacheIndex;
-                    }
-                    // invalidate cache
-                    //console.log("sendGet invalidate:", cacheIndex);
-                    self.cachedLines[cacheIndex] = undefined;
-                    return false;
-                }
-                if (undefined == self.cachedLines[cacheIndex] ||
-                   line != self.cachedLines[cacheIndex].content[0].line)
-                {
-                    // console.log("sendGet GET /logv/get?id=" + self.id + "&line=" + line + "&size=" + clc);
-                    $.get("/logv/get?id=" + self.id + "&line=" + line + "&size=" + clc, function (resp) { self.onGetRsp(resp) });
-                    return true;
-                }
-                return false;
+                self.viewer.updateDisplay();
             }
 
-            updateDisplay(forced)
+            onViewUpdate()
             {
-                var isForced = false;
-                if (undefined != forced)
-                {
-                    isForced = forced;
-                }
                 var self = this;
-                var clc = self.cachedLineCount;
-                var currentCacheIndex = Math.floor(self.scroll / clc) % 3;
-                var currentIndex = self.scroll % clc;
-
-                var cachedCtr = [$("#" + self.contentref + ">#content-block-0")
-                                ,$("#" + self.contentref + ">#content-block-1")
-                                ,$("#" + self.contentref + ">#content-block-2")];
-
-                var offset = self.scrollOffset;
-                var i = 0;
-                for (i=0; i<3; i++)
-                {
-                    if (true==isForced || 0==cachedCtr[i].length || undefined==self.cachedLines[i] || self.cachedLines[i].content[0].line != cachedCtr[i][0].dataset.line)
-                    {
-                        var cl = self.cachedLines[i];
-                        if (0==cachedCtr[i].length)
-                        {
-                            // console.log("updateDisplay create display["+i+"]");
-                            $("#" + self.contentref).append("<div style='position:absolute' id='content-block-"+i+"'><div>");
-                            cachedCtr[i] = $("#" + self.contentref + ">#content-block-"+i);
-                        }
-
-                        if (undefined==cl)
-                        {
-                            // console.log("updateDisplay no cache cache["+i+"]");
-                            if (0 != cachedCtr[i].length)
-                            {
-                                cachedCtr[i].html("");
-                                // console.log("updateDisplay invalidate", cachedCtr[i]);
-                            }
-                            continue;
-                        }
-
-                        if (self.cachedLines[i].content[0].line != cachedCtr[i][0].dataset.line)
-                        { // cached stale
-                            // console.log("updateDisplay displaying: ",cl, "on", cachedCtr[i]);
-                            // console.log("updateDisplay self.cachedLines[i].content[0].line: ", self.cachedLines[i].content[0].line);
-                            // console.log("updateDisplay cachedCtr[i][0].dataset.line: ", cachedCtr[i][0].dataset.line);
-                            cachedCtr[i].html("");
-                            var j=0;
-                            for (j=0; j<cl.content.length; j++)
-                            {
-                                var linenumber = document.createElement("span");
-                                linenumber.style.display = "inline";
-                                linenumber.innerText =  cl.content[j].original_line;
-
-                                var string = document.createElement("span");
-                                string.style.display = "inline";
-                                string.style.marginLeft = "10px";
-                                string.innerText = cl.content[j].string;
-
-                                var logline = document.createElement("div");
-                                logline.style.height = self.lineHeight + "px";
-                                logline.className = "logline";
-
-                                logline.appendChild(linenumber);
-                                logline.appendChild(string);
-
-                                cachedCtr[i][0].append(logline);
-                            }
-                            var line = (cl.content[0].line-offset);
-                            cachedCtr[i][0].style.top = line*self.lineHeight +"px";
-                            cachedCtr[i][0].dataset.line = cl.content[0].line;
-                            // console.log("updateDisplay display:",i,"at top:",line*self.lineHeight);
-                        }
-
-                        // if (undefined == self.marktimer)
-                        // {
-                            var cachedCtrCurrent = cachedCtr[i];
-                            // self.marktimer = window.setTimeout(function(){
-                                self.marktimer = undefined;
-                                self.marks.forEach(function(value,index){
-                                    // console.log("marking",value,index,"on",cachedCtrCurrent);
-                                    cachedCtrCurrent.markRegExp(value.regex, {className: "mark-"+index});
-                                    var marked = $(".mark-"+index);
-                                    marked.css("background",value.bgColor);
-                                    marked.css("color",value.fgColor);
-                                });
-                            // }, 100);
-                        // }
-                    }
-                }
-                var scroll = self.scroll-offset;
-                // console.log("updateDisplay actual scroll",self.scroll," scroll:", scroll,"scrollTop:",scroll*self.lineHeight);
-                $("#" + self.contentref).scrollTop(scroll*self.lineHeight);
+                self.marks.forEach(function(value,index){
+                    $(self.tabContent).markRegExp(value.regex, {className: "mark-"+index});
+                    var marked = $(".mark-"+index);
+                    marked.css("background",value.bgColor);
+                    marked.css("color",value.fgColor);
+                });
             }
-
             addMark(regex, markNumber, fgColor, bgColor)
             {
-                self = this;
+                var self = this;
                 self.marks.set(markNumber, {
                     regex: regex,
                     fgColor: fgColor,
                     bgColor: bgColor
                 });
-                self.updateDisplay(true);
+                self.onViewUpdate();
             }
 
             removeMark(markNumber)
             {
+                var self = this;
                 self.marks.delete(markNumber);
+                self.onViewUpdate();
             }
         }
 
@@ -474,6 +551,7 @@
         $("#tab-main").tabs();
 
         var logv = new Logv();
+        logv.open("test.log");
     </script>
 </body>
 

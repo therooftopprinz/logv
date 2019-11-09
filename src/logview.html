@@ -26,7 +26,7 @@
             }
         </style>
         <script>
-            class LogView
+            class Viewer
             {
                 constructor(element, size, contentCallback)
                 {
@@ -35,8 +35,8 @@
 
                     self.logsize      = size;
                     self.pageLineSize = 10;
-                    self.lineHeight   = 3;
-                    self.scroll       = 0;
+                    self.lineHeight   = 20;
+                    self.scroll       = 5;
                     self.contentCallback = contentCallback;
                     self.pageCount  = 6;
                     self.$ = jQuery; /* global jQuery */
@@ -57,6 +57,17 @@
                     self.content.style.background = "brown";
                     self.content.style.height     = "100%";
 
+                    $(self.content).bind('mousewheel', function (e) {
+                        if (e.originalEvent.wheelDelta / 120 > 0)
+                        {
+                            self.onSlide(self.scroll-1);
+                        }
+                        else
+                        {
+                            self.onSlide(self.scroll+1);
+                        }
+                    });
+
                     self.contentPages  = new Array();
                     var pageColors = ["blue","green","red","cyan","yellow","magenta"];
 
@@ -65,8 +76,6 @@
                         self.contentPages[i] = document.createElement("div")
                         self.contentPages[i].style.position   = "absolute";
                         self.contentPages[i].style.background = pageColors[i%pageColors.length];
-                        self.contentPages[i].style.height     = self.lineHeight*self.pageLineSize+"px";
-                        self.contentPages[i].innerText  = "loading";
                         self.content.append(self.contentPages[i]);
                     }
 
@@ -87,13 +96,18 @@
                     self.container.append(scrollerContainer);
 
                     self.createSlider();
-                    
-                    for(i=0; i<self.pageLineSize; i++)
-                    {
-                        self.contentCallback(i*self.pageSize, self.pageSize);
-                    }
+
+                    self.onSlide(0);
                 }
-                
+
+                fetch(offset, size, page)
+                {
+                    var self = this;
+                    var reqcontext = {line:offset, page:page};
+                    self.contentCallback(offset, size, reqcontext,
+                    function(value, context){self.onData(value, context);});
+                }
+
                 setSize(size)
                 {
                     var self = this;
@@ -106,7 +120,7 @@
                     var self = this;
                     self.$(self.scroller).slider({
                         orientation: "vertical",
-                        min: 0,
+                        min: 1,
                         max: self.logsize,
                         value: self.logsize,
                         slide: function (event, ui)
@@ -120,23 +134,94 @@
                 onSlide(value)
                 {
                     var self = this;
+                    if (value<0)
+                    {
+                        value=0;
+                    }
+                    else if (value>=(self.logsize-1))
+                    {
+                        value = self.logsize-1;
+                    }
                     self.scroll = value;
-                    console.log("onSlide:", self.scroll);
+                    self.container.dataset.scroll = value;
                     self.updateDisplay();
                 }
-                
+
+                onData(value, context)
+                {
+                    var self = this;
+                    var page = self.contentPages[context.page]
+                    var i=0;
+
+                    if (undefined == page.dataset.requestLine || page.dataset.requestLine != context.line)
+                    {
+                        return;
+                    }
+
+                    page.innerHTML = "";
+                    page.dataset.line = context.line;
+
+                    for(i=0; i<value.content.length; i++)
+                    {
+                        var gutter = document.createElement("span");
+                        gutter.innerText = value.content[i].line;
+
+                        var line = document.createElement("span");
+                        line.innerText = value.content[i].string;
+
+                        var log = document.createElement("div");
+                        log.style.overflowY = "hidden";
+                        log.style.height = self.lineHeight + "px";
+                        log.append(gutter);
+                        log.append(line);
+
+                        page.append(log)
+                    }
+                }
+
                 updateDisplay()
                 {
                     var self = this;
                     var i;
-                    var pageIndex = Math.floor(self.scroll/self.pageLineSize)%self.pageCount;
+                    var pageNumber = Math.floor(self.scroll/self.pageLineSize);
+                    var pageIndex = pageNumber%self.pageCount;
                     var pageHeight = self.pageLineSize*self.lineHeight;
-
-                    console.log("updateDisplay:",self.contentPages);
+                    var offset = (self.scroll%self.pageLineSize)*self.lineHeight;
+                    console.log("updateDisplay scroll:", self.scroll, "page:", pageNumber,"page-index:",pageIndex);
                     for (i=0; i<self.pageCount; i++)
                     {
-                        var index = (self.pageCount-(i-pageIndex))%self.pageCount;
-                        self.contentPages[i].style.top = index*pageHeight+"px";
+                        var currentPage = self.contentPages[i];
+                        var positionToCurrentPage = i-pageIndex;
+                        var rawIndex = positionToCurrentPage%self.pageCount;
+                        var index = rawIndex;
+
+                        if (index<=(-self.pageCount/2))
+                        {
+                            index = self.pageCount + index;
+                        }
+                        else if (index > self.pageCount/2)
+                        {
+                            index =-(self.pageCount - index);
+                        }
+
+                        var currentLine = (pageNumber+index)*self.pageLineSize;
+
+                        console.log("E:", i, "data-line", currentLine, "index", index);
+                        currentPage.style.top = (index*pageHeight-offset)+"px";
+
+                        if (currentLine >= self.logsize || currentLine < 0)
+                        {
+                            currentPage.innerHTML = "end";
+                            currentPage.dataset.requestLine = -1;
+                            continue;
+                        }
+
+                        if (currentLine<=self.logsize && currentLine>=0 && ("end" == currentPage.innerHTML || undefined == currentPage.dataset.line || currentLine != currentPage.dataset.line))
+                        {
+                            currentPage.innerHTML = "loading...";
+                            currentPage.dataset.requestLine = currentLine; 
+                            self.fetch(currentLine, self.pageLineSize, i);
+                        }
                     }
                 }
             }
@@ -145,7 +230,18 @@
     <body>
         <div id="container-log"></div>
         <script>
-            logview = new LogView($("#container-log"), 1000, function(resultCallback){});
+            viewer = new Viewer($("#container-log"), 2000000, function(offset, size, reqcontext, resultCallback){
+                window.setTimeout(function(){
+                    var rv = new Array();
+                    var i;
+                    for (i=0; offset<2000000 && i<size; i++)
+                    {
+                        var line = offset+i;
+                        rv[i] = {line: line, original_line: line, string:"logline "+line};
+                    }
+                    resultCallback({content:rv}, reqcontext);
+                }, 100);
+            });
         </script>
     </body>
 </html>
