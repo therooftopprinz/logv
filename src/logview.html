@@ -28,11 +28,18 @@
         <script>
             class LogView
             {
-                constructor(element)
+                constructor(element, size, contentCallback)
                 {
                     var self = this;
-                    self.size = 1000;
-                    self.$ = jQuery;
+                    var i;
+
+                    self.logsize      = size;
+                    self.pageLineSize = 10;
+                    self.lineHeight   = 3;
+                    self.scroll       = 0;
+                    self.contentCallback = contentCallback;
+                    self.pageCount  = 6;
+                    self.$ = jQuery; /* global jQuery */
                     self.element = self.$(element);
                     self.container = document.createElement("div");
                     self.container.style.display             = "grid";
@@ -49,24 +56,88 @@
                     self.content = document.createElement("div");
                     self.content.style.background = "brown";
                     self.content.style.height     = "100%";
+
+                    self.contentPages  = new Array();
+                    var pageColors = ["blue","green","red","cyan","yellow","magenta"];
+
+                    for (i=0; i<self.pageCount; i++)
+                    {
+                        self.contentPages[i] = document.createElement("div")
+                        self.contentPages[i].style.position   = "absolute";
+                        self.contentPages[i].style.background = pageColors[i%pageColors.length];
+                        self.contentPages[i].style.height     = self.lineHeight*self.pageLineSize+"px";
+                        self.contentPages[i].innerText  = "loading";
+                        self.content.append(self.contentPages[i]);
+                    }
+
                     self.container.append(self.content);
 
-                    self.scroller = document.createElement("div");
-                    self.scroller.style.background    = "green";
-                    self.scroller.style.height        = "100%";
-                    self.scroller.style.marginTop     = "10px";
-                    self.scroller.style.marginBottom  = "10px";
-                    self.scroller.style.marginLeft    = "5px";
-                    self.scroller.style.marginRight   = "5px";
-                    self.container.append(self.scroller);
+                    var scrollerContainer = document.createElement("div");
+                    scrollerContainer.style.background = "green";
+                    scrollerContainer.style.height     = "100%";
+                    scrollerContainer.style.display    = "flex";
+                    scrollerContainer.style.alignItems = "center";
 
+                    self.scroller = document.createElement("div");
+                    self.scroller.style.height        = "calc(100% - 20px)";
+                    self.scroller.style.background    = "none";
+                    self.scroller.style.border        = "0px";
+
+                    scrollerContainer.append(self.scroller);
+                    self.container.append(scrollerContainer);
+
+                    self.createSlider();
+                    
+                    for(i=0; i<self.pageLineSize; i++)
+                    {
+                        self.contentCallback(i*self.pageSize, self.pageSize);
+                    }
+                }
+                
+                setSize(size)
+                {
+                    var self = this;
+                    self.size = size;
+                    self.createSlider();
+                }
+
+                createSlider()
+                {
+                    var self = this;
                     self.$(self.scroller).slider({
                         orientation: "vertical",
                         min: 0,
-                        max: self.size,
-                        value: self.size,
-                        slide: function (event, ui) {}
+                        max: self.logsize,
+                        value: self.logsize,
+                        slide: function (event, ui)
+                        {
+                            var value = self.logsize-ui.value;
+                            self.onSlide(value);
+                        }
                     });
+                }
+
+                onSlide(value)
+                {
+                    var self = this;
+                    self.scroll = value;
+                    console.log("onSlide:", self.scroll);
+                    self.updateDisplay();
+                }
+                
+                updateDisplay()
+                {
+                    var self = this;
+                    var i;
+                    var pageIndex = Math.floor(self.scroll/self.pageLineSize)%self.pageCount;
+                    var pageHeight = self.pageLineSize*self.lineHeight;
+
+                    console.log("updateDisplay:",self.contentPages);
+                    for (i=0; i<self.pageCount; i++)
+                    {
+                        var index = (self.pageCount-(i-pageIndex))%self.pageCount;
+                        self.contentPages[i].style.top = index*pageHeight+"px";
+                    }
                 }
             }
         </script>
@@ -74,7 +145,7 @@
     <body>
         <div id="container-log"></div>
         <script>
-            logview = new LogView($("#container-log"));
+            logview = new LogView($("#container-log"), 1000, function(resultCallback){});
         </script>
     </body>
 </html>
