@@ -77,13 +77,18 @@ public:
 
         uint64_t size = std::stoull(findIt->second);
 
-        auto fileIt = mLogFiles.find(id);
-        if (mLogFiles.end()==fileIt)
+        LogFile *lf;
         {
-            return "{\"status\":\"INVALID_ID\"}";
+            std::unique_lock<std::mutex> lg(mLogFilesMutex);
+            auto fileIt = mLogFiles.find(id);
+            if (mLogFiles.end()==fileIt)
+            {
+                return "{\"status\":\"INVALID_ID\"}";
+            }
+            lf = &fileIt->second;
         }
 
-        auto& logFile = fileIt->second;
+        auto& logFile = *lf;
 
         std::string rv = "{";
         rv += "\"content\":[";
@@ -111,7 +116,22 @@ public:
     }
 
     std::string grep(const ArgsMap&) {return "{\"status\":\"NOT_IMPLEMENTED\"}";}
-    std::string list(const ArgsMap&) {return "{\"status\":\"NOT_IMPLEMENTED\"}";}
+
+    std::string list(const ArgsMap&)
+    {   std::string rv = "{\"open_files\":[";
+        std::unique_lock<std::mutex> lg(mLogFilesMutex);
+        for (auto& i : mLogFiles)
+        {
+            rv += "{\"status\":\"OK\",\"path\":\""+i.second.path+"\",\"id\":\""+ std::to_string(i.first) + "\",\"original_id\":" + std::to_string(i.second.parentFile) +",\"size\":"+ std::to_string(i.second.logLines.size()) +"},";
+        }
+        if (rv.size() && ','==rv[rv.size()-1])
+        {
+            rv.pop_back();
+        }
+        rv += "]}";
+        return rv;
+    }
+
     std::string open(const ArgsMap& pArgs)
     {
         auto findIt = pArgs.find("path");
@@ -133,16 +153,24 @@ public:
         }
         
         std::string line;
-        
-        auto e = mLogFiles.emplace(mGenId, LogFile{});
+
+        auto id = mGenId.fetch_add(1);
+        LogFile* lf;
+        {
+            std::unique_lock<std::mutex> lg(mLogFilesMutex);
+            lf = &mLogFiles.emplace(id, LogFile{}).first->second;
+        }
         for (uint64_t n=0; std::getline(fs, line); n++)
         {
-            e.first->second.logLines.emplace_back(LogEntry{n,n,std::move(line)});
+            lf->logLines.emplace_back(LogEntry{n,n,std::move(line)});
         }
 
-        return std::string() + "{\"status\":\"OK\",\"id\":\""+ std::to_string(mGenId++) + "\", \"size\":"+ std::to_string(e.first->second.logLines.size()) +"}";
+        lf->parentFile = id;
+        lf->path = findIt->second;
+        return std::string() + "{\"status\":\"OK\",\"path\":\""+lf->path+"\",\"id\":\""+ std::to_string(id) + "\",\"original_id\":" + std::to_string(lf->parentFile) +",\"size\":"+ std::to_string(lf->logLines.size()) +"}";
     }
 private:
-    uint64_t mGenId=0;
+    std::atomic<uint32_t> mGenId=0;
     std::map<uint64_t, LogFile> mLogFiles;
+    std::mutex mLogFilesMutex;
 };
